@@ -6,6 +6,42 @@ import dwarf;
 import elfutils.libelf;
 import elfutils.elf;
 
+string enumToString(E)(E v)
+{
+    static assert(is(E == enum),
+        "emumToString is only meant for enums");
+    string result;
+    
+Switch : switch(v)
+    {
+        foreach(m;__traits(allMembers, E))
+        {
+            case mixin("E." ~ m) :
+            result = m;
+            break Switch;
+        }
+        
+        default :
+        {
+            result = "cast(" ~ E.stringof ~ ")";
+            uint val = v;
+            enum headLength = cast(uint)(E.stringof.length + "cast()".length);
+            uint log10Val = (val < 10) ? 0 : (val < 100) ? 1 : (val < 1000) ? 2 :
+            (val < 10000) ? 3 : (val < 100000) ? 4 : (val < 1000000) ? 5 :
+            (val < 10000000) ? 6 : (val < 100000000) ? 7 : (val < 1000000000) ? 8 : 9;
+            result.length += log10Val + 1;
+            for(uint i;i != log10Val + 1;i++)
+            {
+                cast(char)result[headLength + log10Val - i] = cast(char) ('0' + (val % 10));
+                val /= 10;
+            }
+            
+        }
+    }
+    
+    return result;
+}
+
 
 enum ElfClassEnum : ubyte
 {
@@ -27,7 +63,6 @@ enum ElfOsabiEnum : ubyte
     ELFOSABI_HPUX = .ELFOSABI_HPUX, /*** HP-UX */
     ELFOSABI_NETBSD = .ELFOSABI_NETBSD, /** NetBSD.  */
     ELFOSABI_GNU = .ELFOSABI_GNU, /** Object uses GNU ELF extensions.  */
-    ELFOSABI_LINUX = .ELFOSABI_GNU, /** Compatibility alias.  */
     ELFOSABI_SOLARIS = .ELFOSABI_SOLARIS, /** Sun Solaris.  */
     ELFOSABI_AIX = .ELFOSABI_AIX, /** IBM AIX.  */
     ELFOSABI_IRIX = .ELFOSABI_IRIX, /** SGI Irix.  */
@@ -71,16 +106,89 @@ align(1) struct ElfHeader
     ElfDataEnum e_data;
     ubyte e_abi_version;
     ElfOsabiEnum e_osabi;
-    ubyte[16 - 8] stuff;
+    ubyte[16 - 8] padding;
     ET e_type;
     EM e_machine;
     uint e_version;
-    void* e_entry;
+    ulong /*void* */ e_entry; /// pointer representing the offset to the entry_point
+    ulong /*size_t */ e_phoff; /// programm header offset
+    uint e_flags; /// Processor-specific flags
+    ushort e_ehsize; /// ELF header size in bytes
+    ushort e_phentsize; /// Program header table entry size
+    ushort e_phnum; /// Program header table entry count
+    ushort e_shentsize; /// Section header table entry size
+    ushort e_shnum; /// Section header table entry count
+    ushort e_shstrndx; /// Section header string table index
+}
 
+
+
+string printStruct(T)(T _struct)
+{
+    string result;
+
+    result ~= T.stringof ~ " (";
+
+    foreach(i, e;_struct.tupleof)
+    {
+        alias type = typeof(_struct.tupleof[i]);
+        const fieldName = _struct.tupleof[i].stringof["_struct.".length .. $];
+
+        result ~= "\n\t" ~ fieldName ~ " : ";
+
+        static if (is(type == enum))
+        {
+            result ~= enumToString(e);
+        }
+        else
+        {
+            import std.conv : to;
+            result ~= to!string(e);
+        }
+    }
+
+    result ~= "\n)";
+
+    return result;
+}
+
+ElfHeader elfEhdr(ubyte[] file)
+{
+    ElfHeader result;
+
+    with(result)
+    {
+        _7f = file[0];
+        _ELF = cast(char[]) file[1 .. 4];
+        e_class = cast(ElfClassEnum) file[4];
+        e_data = cast(ElfDataEnum) file[5];
+        e_abi_version = file[6];
+        e_osabi = cast(ElfOsabiEnum) file[7];
+
+        //TODO Endianness 
+
+        e_type = cast(ET) (file[16] | file[17] << 8);
+        e_machine = cast(EM) (file[17] | file[18] << 8);
+
+        if (e_class == ELFCLASS64)
+        {
+            enum fieldSize = ulong.sizeof;
+            enum next_offset = fieldSize*2 + 18;
+        }
+        else if (e_class == ELFCLASS32)
+        {
+            enum fieldSize = uint.sizeof;
+            enum next_offset = fieldSize*2 + 18;
+        }
+        else assert(0, "ELFCLASS not supported");
+    }
+
+    return result;
 }
 
 enum ET : ushort
-{    ET_NONE = .    ET_NONE, /*** No file type */
+{ 
+    ET_NONE = .ET_NONE, /*** No file type */
     ET_REL = .ET_REL, /** Relocatable file */
     ET_EXEC = .ET_EXEC, /** Executable file */
     ET_DYN = .ET_DYN, /** Shared object file */
@@ -296,7 +404,7 @@ void main(string[] args)
         writeln("ElfClass: ", ec);
         if (ec == ELFCLASS64 || ec == ELFCLASS32)
         {
-            writeln(*cast(ElfHeader*) ls.ptr);
+            writeln(printStruct(*cast(ElfHeader*) ls.ptr));
         }
 
         //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", ls[EI_CLASS], ls[EI_CLASS] == ELFCLASS64);
