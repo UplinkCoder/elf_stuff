@@ -168,19 +168,73 @@ ElfHeader elfEhdr(ubyte[] file)
         //TODO Endianness 
 
         e_type = cast(ET) (file[16] | file[17] << 8);
-        e_machine = cast(EM) (file[17] | file[18] << 8);
+        e_machine = cast(EM) (file[18] | file[19] << 8);
+        e_version = (file[20] | file[21] << 8 | 
+            file[22] << 16 | file[23] << 24);
+
+        size_t next_offset;
 
         if (e_class == ELFCLASS64)
         {
             enum fieldSize = ulong.sizeof;
-            enum next_offset = fieldSize*2 + 18;
+
+            e_entry = (file[24] | file[25] << 8 | 
+                file[26] << 16 | file[27] << 24 |
+                (ulong(file[28]) << 32) | (ulong(file[29]) << 40) |
+                (ulong(file[30]) << 48) | (ulong(file[31]) << 56));
+
+            e_phoff = (file[32] | file[33] << 8 | 
+                file[34] << 16 | file[35] << 24 |
+                ulong(file[36]) << 32UL | ulong(file[37]) << 40UL |
+                ulong(file[38]) << 48UL | ulong(file[39]) << 56UL);
+
+            
+            next_offset = fieldSize*2 + 24;
         }
         else if (e_class == ELFCLASS32)
         {
             enum fieldSize = uint.sizeof;
-            enum next_offset = fieldSize*2 + 18;
+
+            e_entry = (file[24] | file[25] << 8 | 
+                file[26] << 16 | file[27] << 24);
+
+            e_phoff = (file[28] | file[29] << 8 | 
+                file[30] << 16 | file[31] << 24);
+
+            next_offset = fieldSize*2 + 24;
         }
+
         else assert(0, "ELFCLASS not supported");
+
+        e_flags = (file[next_offset + 0] |
+                file[next_offset + 1] << 8 | 
+                file[next_offset + 2] << 16 |
+                file[next_offset + 3] << 24);
+        next_offset += 4;
+
+        e_ehsize = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
+
+        e_phentsize = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
+
+        e_phnum = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
+
+        e_shentsize = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
+
+        e_shnum = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
+
+        e_shstrndx = (file[next_offset + 0] |
+            file[next_offset + 1] << 8);
+        next_offset += 2;
     }
 
     return result;
@@ -405,13 +459,14 @@ void main(string[] args)
         if (ec == ELFCLASS64 || ec == ELFCLASS32)
         {
             writeln(printStruct(*cast(ElfHeader*) ls.ptr));
+            writeln(printStruct(elfEhdr(ls)));
         }
 
         //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", ls[EI_CLASS], ls[EI_CLASS] == ELFCLASS64);
     }
     else
     {
-        printf("\nNo Elf ma boy\n {%x %c %c %c}\n", ls[EI_MAG0], ls[EI_MAG1], ls[EI_MAG2], ls[EI_MAG3]);
+        printf("\nMagic number is not 7f E L F but: \t{%x %c %c %c}\n", ls[EI_MAG0], ls[EI_MAG1], ls[EI_MAG2], ls[EI_MAG3]);
     }
 
 }
