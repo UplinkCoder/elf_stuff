@@ -112,6 +112,7 @@ align(1) struct ElfHeader
     uint e_version;
     ulong /*void* */ e_entry; /// pointer representing the offset to the entry_point
     ulong /*size_t */ e_phoff; /// programm header offset
+    ulong /*size_t */ e_shoff; /// section header table
     uint e_flags; /// Processor-specific flags
     ushort e_ehsize; /// ELF header size in bytes
     ushort e_phentsize; /// Program header table entry size
@@ -188,8 +189,13 @@ ElfHeader elfEhdr(ubyte[] file)
                 ulong(file[36]) << 32UL | ulong(file[37]) << 40UL |
                 ulong(file[38]) << 48UL | ulong(file[39]) << 56UL);
 
+            e_shoff = (file[40] | file[41] << 8 | 
+                file[42] << 16 | file[43] << 24 |
+                ulong(file[44]) << 32UL | ulong(file[45]) << 40UL |
+                ulong(file[46]) << 48UL | ulong(file[47]) << 56UL);
+
             
-            next_offset = fieldSize*2 + 24;
+            next_offset = fieldSize*3 + 24;
         }
         else if (e_class == ELFCLASS32)
         {
@@ -201,7 +207,10 @@ ElfHeader elfEhdr(ubyte[] file)
             e_phoff = (file[28] | file[29] << 8 | 
                 file[30] << 16 | file[31] << 24);
 
-            next_offset = fieldSize*2 + 24;
+            e_shoff = (file[32] | file[33] << 8 | 
+                file[34] << 16 | file[35] << 24);
+
+            next_offset = fieldSize*3 + 24;
         }
 
         else assert(0, "ELFCLASS not supported");
@@ -450,7 +459,7 @@ enum EM : ushort
 void main(string[] args)
 {
     printf("%.*s {file.elf}\n", cast(int)args[0].length, args[0].ptr);
-    ubyte[] ls = cast(ubyte[]) read("/bin/ls");
+    ubyte[] ls = cast(ubyte[]) read("/bin/ls" /*"/lib/ld-linux.so.2"*/);
 
     if (isElf(ls)) {
         printf("Yes, this is an ELF file!\n");
@@ -458,8 +467,11 @@ void main(string[] args)
         writeln("ElfClass: ", ec);
         if (ec == ELFCLASS64 || ec == ELFCLASS32)
         {
-            writeln(printStruct(*cast(ElfHeader*) ls.ptr));
-            writeln(printStruct(elfEhdr(ls)));
+            writeln(ec == ELFCLASS32 ? printStruct(*cast(Elf32_Ehdr*) ls.ptr) : printStruct(*cast(Elf64_Ehdr*) ls.ptr));
+
+            auto ehdr = elfEhdr(ls);
+
+            writeln(printStruct(ehdr), "\n\te_entry as ptr: ", (cast(void*) ehdr.e_entry));
         }
 
         //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", ls[EI_CLASS], ls[EI_CLASS] == ELFCLASS64);
