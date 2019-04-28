@@ -236,8 +236,28 @@ string printStruct(T)(T _struct)
         }
         else
         {
-            import std.conv : to;
-            result ~= to!string(e);
+            static if (__traits(getAttributes, _struct.tupleof[i]).length == 1)
+            {
+                foreach(attrib;__traits(getAttributes, _struct.tupleof[i]))
+                {
+                    static if (is(attrib == .addr) || is(attrib == .offset) )
+                    {
+                        import std.conv : to;
+                        pragma(msg, "got attrib addr while printing");
+                        result ~= to!string(cast(void*)e);
+                    }
+                    else
+                    {
+                        import std.conv : to;
+                        result ~= to!string(e);
+                    }
+                }
+            }
+            else
+            {
+                import std.conv : to;
+                result ~= to!string(e);
+            }
         }
     }
 
