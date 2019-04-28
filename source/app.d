@@ -124,6 +124,99 @@ align(1) struct ElfHeader
 
 
 
+struct elf64 {}
+struct addr {}
+struct offset {}
+
+align(1) struct ElfPHeader
+{
+    PT p_type;
+    @elf64 uint p_flags;
+    @offset ulong p_offset;
+    @addr ulong p_vaddr;
+    @addr ulong p_paddr;
+    @offset ulong p_filesz;
+    @offset ulong p_memsz;
+    @offset ulong p_align;
+}
+
+ElfPHeader elfPHdr(ubyte[] file, size_t offset, bool elf64)
+{
+    ElfPHeader result;
+
+    foreach(i,ref f;result.tupleof)
+    {
+        static if (__traits(getAttributes, result.tupleof[i]).length)
+        {
+            foreach(attrib;__traits(getAttributes, result.tupleof[i]))
+            {
+                static if (is(attrib == .offset) || is(attrib == .addr))
+                {
+
+                    f = (file[offset] | file[offset + 1] << 8 | 
+                        file[offset + 2] << 16 | file[offset + 3] << 24 | (elf64 ?
+                        (ulong(file[offset + 4]) << 32UL | ulong(file[offset + 5]) << 40UL |
+                        ulong(file[offset + 6]) << 48UL | ulong(file[offset + 7]) << 56UL)
+                        : 0));
+                    offset += elf64 ? 8 : 4;
+
+                    pragma(msg, "addr or offset found for ", __traits(identifier, result.tupleof[i]));
+                }
+                else static if (is(attrib == .elf64))
+                {
+                    if (elf64)
+                    {
+                        f = file[offset] | file[offset + 1] << 8 |
+                           file[offset + 2] << 16 | file[offset + 3] << 24;
+                        offset += 4;
+                    }
+                }
+                else
+                {
+                    static assert (0, "unknown attrib");
+                }
+            }
+        }
+        else
+        {
+            f = cast(typeof(f)) ( 
+                    file[offset] | file[offset + 1] << 8 |
+                    file[offset + 2] << 16 | file[offset + 3] << 24
+                );
+            offset += 4;
+            pragma(msg, "no attribs for: ", __traits(identifier, result.tupleof[i]));
+        }
+    }
+
+    return result;
+}
+
+ElfPHeader[] elfPHdrs (ubyte[] file)
+{
+    auto ehdr = elfEhdr(file);
+    return elfPhdrs(ehdr, file);
+}
+
+ElfPHeader[] elfPhdrs(ElfHeader ehdr, ubyte[] file)
+{
+    ElfPHeader[] result;
+
+    ulong currentOffset = ehdr.e_phoff;
+
+    result.length = ehdr.e_phnum;
+    bool is64 = 
+        ehdr.e_class == ELFCLASS64;
+    const phentsize = cast(int)ehdr.e_phentsize;
+
+    foreach(i; 0 .. ehdr.e_phnum)
+    {
+        result[i] = elfPHdr(file, currentOffset, is64);
+        currentOffset += phentsize;
+    }
+
+    return result;
+}
+
 string printStruct(T)(T _struct)
 {
     string result;
@@ -456,10 +549,34 @@ enum EM : ushort
 
 }
 
+                                                                                             
+enum PT {
+    PT_NULL = .PT_NULL, /** Program header table entry unused */
+    PT_LOAD = .PT_LOAD, /** Loadable program segment */
+    PT_DYNAMIC = .PT_DYNAMIC, /** Dynamic linking information */
+    PT_INTERP = .PT_INTERP, /** Program interpreter */
+    PT_NOTE = .PT_NOTE, /** Auxiliary information */
+    PT_SHLIB = .PT_SHLIB, /** Reserved */
+    PT_PHDR = .PT_PHDR, /** Entry for header table itself */
+    PT_TLS = .PT_TLS, /** Thread-local storage segment */
+    PT_NUM = .PT_NUM, /** Number of defined types */
+    PT_LOOS = .PT_LOOS, /** Start of OS-specific */
+    PT_GNU_EH_FRAME = .PT_GNU_EH_FRAME, /** GCC .eh_frame_hdr segment */
+    PT_GNU_STACK = .PT_GNU_STACK, /** Indicates stack executability */
+    PT_GNU_RELRO = .PT_GNU_RELRO, /** Read-only after relocation */
+    PT_SUNWBSS = .PT_SUNWBSS, /** Sun Specific segment */
+    PT_SUNWSTACK = .PT_SUNWSTACK, /** Stack segment */
+    PT_HIOS = .PT_HIOS, /** End of OS-specific */
+    PT_LOPROC = .PT_LOPROC, /** Start of processor-specific */
+    PT_HIPROC = .PT_HIPROC, /** End of processor-specific */
+}
+
+
+
 void main(string[] args)
 {
     printf("%.*s {file.elf}\n", cast(int)args[0].length, args[0].ptr);
-    ubyte[] ls = cast(ubyte[]) read("/bin/ls" /*"/lib/ld-linux.so.2"*/);
+    ubyte[] ls = cast(ubyte[]) read("busybox" /*"/lib/ld-linux.so.2"*/);
 
     if (isElf(ls)) {
         printf("Yes, this is an ELF file!\n");
@@ -467,11 +584,16 @@ void main(string[] args)
         writeln("ElfClass: ", ec);
         if (ec == ELFCLASS64 || ec == ELFCLASS32)
         {
-            writeln(ec == ELFCLASS32 ? printStruct(*cast(Elf32_Ehdr*) ls.ptr) : printStruct(*cast(Elf64_Ehdr*) ls.ptr));
+            //writeln(ec == ELFCLASS32 ? printStruct(*cast(Elf32_Ehdr*) ls.ptr) : printStruct(*cast(Elf64_Ehdr*) ls.ptr));
 
             auto ehdr = elfEhdr(ls);
 
             writeln(printStruct(ehdr), "\n\te_entry as ptr: ", (cast(void*) ehdr.e_entry));
+            auto phdrs = elfPhdrs(ehdr, ls);
+            foreach(ph; phdrs)
+            {
+                writeln(printStruct(ph));
+            }
         }
 
         //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", ls[EI_CLASS], ls[EI_CLASS] == ELFCLASS64);
