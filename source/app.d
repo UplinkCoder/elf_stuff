@@ -79,9 +79,9 @@ align(1) struct ElfHeader
     ET e_type;
     EM e_machine;
     uint e_version;
-    ulong /*void* */ e_entry; /// pointer representing the offset to the entry_point
-    ulong /*size_t */ e_phoff; /// programm header offset
-    ulong /*size_t */ e_shoff; /// section header table
+    @offset ulong /*void* */ e_entry; /// pointer representing the offset to the entry_point
+    @offset ulong /*size_t */ e_phoff; /// programm header offset
+    @offset ulong /*size_t */ e_shoff; /// section header table
     uint e_flags; /// Processor-specific flags
     ushort e_ehsize; /// ELF header size in bytes
     ushort e_phentsize; /// Program header table entry size
