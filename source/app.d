@@ -333,34 +333,46 @@ ElfHeader elfEhdr(ubyte[] file)
 
 
 
-void main(string[] args)
+int main(string[] args)
 {
-    printf("%.*s {file.elf}\n", cast(int)args[0].length, args[0].ptr);
-    ubyte[] ls = cast(ubyte[]) read("busybox" /*"/lib/ld-linux.so.2"*/);
-
-    if (isElf(ls)) {
+    if (args.length != 2)
+    {
+        printf("%.*s {file.elf}\n", cast(int)args[0].length, args[0].ptr);
+        return -1;
+    }
+    ubyte[] in_file;
+    try {
+        in_file = cast(ubyte[]) read(args[1] /*"/lib/ld-linux.so.2"*/);
+    }
+    catch(Throwable e)
+    {
+        printf("something wen't wrong while opening %s!\n", (args[1] ~ '\0').ptr);
+        return -1;
+    }
+    if (isElf(in_file)) {
         printf("Yes, this is an ELF file!\n");
-        auto ec = ls.elfClass;
+        auto ec = in_file.elfClass;
         writeln("ElfClass: ", ec);
         if (ec == ELFCLASS64 || ec == ELFCLASS32)
         {
-            //writeln(ec == ELFCLASS32 ? printStruct(*cast(Elf32_Ehdr*) ls.ptr) : printStruct(*cast(Elf64_Ehdr*) ls.ptr));
+            //writeln(ec == ELFCLASS32 ? printStruct(*cast(Elf32_Ehdr*) in_file.ptr) : printStruct(*cast(Elf64_Ehdr*) in_file.ptr));
 
-            auto ehdr = elfEhdr(ls);
+            auto ehdr = elfEhdr(in_file);
 
             writeln(printStruct(ehdr), "\n\te_entry as ptr: ", (cast(void*) ehdr.e_entry));
-            auto phdrs = elfPhdrs(ehdr, ls);
+            auto phdrs = elfPhdrs(ehdr, in_file);
             foreach(ph; phdrs)
             {
                 writeln(printStruct(ph));
             }
         }
-
-        //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", ls[EI_CLASS], ls[EI_CLASS] == ELFCLASS64);
+        return 0;
+        //printf("ELFCLASS: %x, == ELFCLASS64 {%d}", in_file[EI_CLASS], in_file[EI_CLASS] == ELFCLASS64);
     }
     else
     {
-        printf("\nMagic number is not 7f E L F but: \t{%x %c %c %c}\n", ls[EI_MAG0], ls[EI_MAG1], ls[EI_MAG2], ls[EI_MAG3]);
+        printf("\nMagic number is not 7f E L F but: \t{%x %c %c %c}\n", in_file[EI_MAG0], in_file[EI_MAG1], in_file[EI_MAG2], in_file[EI_MAG3]);
+        return -1;
     }
 
 }
