@@ -6,43 +6,7 @@ import dwarf;
 import elfutils.libelf;
 import elfutils.elf;
 import denums;
-
-string enumToString(E)(E v)
-{
-    static assert(is(E == enum),
-        "emumToString is only meant for enums");
-    string result;
-    
-Switch : switch(v)
-    {
-        foreach(m;__traits(allMembers, E))
-        {
-            case mixin("E." ~ m) :
-            result = m;
-            break Switch;
-        }
-        
-        default :
-        {
-            result = "cast(" ~ E.stringof ~ ")";
-            uint val = v;
-            enum headLength = cast(uint)(E.stringof.length + "cast()".length);
-            uint log10Val = (val < 10) ? 0 : (val < 100) ? 1 : (val < 1000) ? 2 :
-                (val < 10000) ? 3 : (val < 100000) ? 4 : (val < 1000000) ? 5 :
-                (val < 10000000) ? 6 : (val < 100000000) ? 7 : (val < 1000000000) ? 8 : 9;
-            result.length += log10Val + 1;
-            for(uint i;i != log10Val + 1;i++)
-            {
-                cast(char)result[headLength + log10Val - i] = cast(char) ('0' + (val % 10));
-                val /= 10;
-            }
-            
-        }
-    }
-    
-    return result;
-}
-
+import util;
 
 bool isElf(ubyte[] file)
 {
@@ -346,7 +310,7 @@ int main(string[] args)
     }
     catch(Throwable e)
     {
-        printf("something wen't wrong while opening %s!\n", (args[1] ~ '\0').ptr);
+        printf("something wen't wrong while opening '%s'.\n", (args[1] ~ '\0').ptr);
         return -1;
     }
     if (isElf(in_file)) {
