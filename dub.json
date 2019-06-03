@@ -1,0 +1,9 @@
+{
+	"name": "elf_stuff",
+	"authors": [
+		"Stefan Koch"
+	],
+	"description": "ELF STUFF",
+	"copyright": "Copyright © 2019, Stefan Koch",
+	"license": "boost"
+}
